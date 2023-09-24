@@ -4,6 +4,7 @@
 $populationSize = 50;
 $generationCount = 100;
 $mutationRate = 0.1;
+$totalsolarpower=0.0;
 
 // Appliance Parameters
 $applianceCount = 2;
@@ -64,23 +65,18 @@ function calculateFitness($schedule, $solarPowerForecast, $appliancePower) {
                 $slotEnergyConsumption += $appliancePower[$applianceIndex];
             }
         }
-
-        if ($slotEnergyConsumption <= $solarPowerForecast[$slot]) {
-            if($solarPowerForecast[$slot]!=0){
-            $fitness = $slotEnergyConsumption / $solarPowerForecast[$slot];
-            }
-            else{
-                $fitness=0;
-            }
-            
-        } else {
-            $fitness = $solarPowerForecast[$slot] / $slotEnergyConsumption;
-        }
-
+        $totalsolarpower += $solarPowerForecast[$slot];
         $totalEnergyConsumption += $slotEnergyConsumption;
     }
+    if ($totalEnergyConsumption <= $totalsolarpower) {
+        
+        $fitness = $totalEnergyConsumption / $totalsolarpower;
+        
+    } else {
+        $fitness = $totalsolarpower / $totalEnergyConsumption;
+    }
 
-    return 1 / ($totalEnergyConsumption + 1);
+    return $fitness;
 }
 
 function selectParent($population, $fitnessScores) {
