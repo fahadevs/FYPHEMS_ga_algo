@@ -4,14 +4,41 @@
 $populationSize = 50;
 $generationCount = 100;
 $mutationRate = 0.1;
-
+$totalsolarpower = 0.0;
+global $totalappliancepower;
+$appliancePower = [800, 400];
 // Appliance Parameters
 $applianceCount = 2;
-$appliancePower = [1000, 1500]; // Power consumption for each appliance
+$appliancePower = [1000, 1500]; // Initial power consumption for each appliance (for a full hour)
 
 // Solar Power Forecast (example values)
-$solarPowerForecast = [0, 0, 0, 0, 0,0, 900, 1200, 1600, 2000, 2200, 2400,
-                       2600, 2800, 3000, 3200, 3400, 3600, 3800, 0, 0, 0, 0, 0];
+$solarPowerForecast = [
+    0, 0, 0, 0,  // Midnight
+    0, 0, 0, 0,  // 1:00 AM
+    0, 0, 0, 0,  // 2:00 AM
+    0, 0, 0, 0,  // 3:00 AM
+    0, 0, 0, 0,  // 4:00 AM
+    0, 0, 0, 0,  // 5:00 AM (Morning)
+    120, 130, 140, 150,  // 6:00 AM
+    160, 170, 180, 190,  // 7:00 AM
+    200, 200, 200, 200,  // 8:00 AM
+    200, 200, 200, 200,  // 9:00 AM
+    200, 200, 200, 200,  // 10:00 AM
+    200, 200, 200, 200,  // 11:00 AM (Midday)
+    200, 200, 200, 200,  // 12:00 PM
+    200, 200, 200, 200,  // 1:00 PM
+    200, 200, 200, 200,  // 2:00 PM
+    200, 200, 200, 200,  // 3:00 PM
+    200, 200, 200, 200,  // 4:00 PM (Afternoon)
+    170, 160, 150, 140,  // 5:00 PM
+    130, 120, 0, 0,      // 6:00 PM (Evening)
+    0, 0, 0, 0,          // 7:00 PM
+    0, 0, 0, 0,          // 8:00 PM
+    0, 0, 0, 0,          // 9:00 PM
+    0, 0, 0, 0,          // 10:00 PM
+    0, 0, 0, 0           // 11:00 PM (Night)
+];
+
 
 // Generate Initial Population
 $population = [];
@@ -41,46 +68,48 @@ for ($generation = 1; $generation <= $generationCount; $generation++) {
 
 // Find the best schedule in the final population
 $bestSchedule = findBestSchedule($population, $solarPowerForecast, $appliancePower);
-printSchedule($bestSchedule,$appliancePower);
+printSchedule($bestSchedule, $appliancePower);
 
 // Genetic Algorithm Functions
 
 function generateRandomSchedule($applianceCount) {
-    $schedule = '';
-    for ($i = 0; $i < 24 * $applianceCount; $i++) {
-        $schedule .= mt_rand(0, 1);
+    $combinedGenome = '';
+    $timeSlots = 24 * 4; // 24 hours with 15-minute slots
+
+    for ($slot = 0; $slot < $timeSlots; $slot++) {
+        $activeAppliance = mt_rand(0, $applianceCount);
+        $combinedGenome .= str_repeat('0', $activeAppliance) . '1' . str_repeat('0', $applianceCount - $activeAppliance);
     }
-    return $schedule;
+
+    return $combinedGenome;
 }
 
 function calculateFitness($schedule, $solarPowerForecast, $appliancePower) {
+    $timeSlots = 24 * 4; // 24 hours with 15-minute slots
     $totalEnergyConsumption = 0;
-
-    for ($slot = 0; $slot < 24; $slot++) {
+    global $totalappliancepower;
+    for ($slot = 0; $slot < $timeSlots; $slot++) {
         $slotEnergyConsumption = 0;
 
         for ($applianceIndex = 0; $applianceIndex < count($appliancePower); $applianceIndex++) {
-            if ($schedule[$applianceIndex * 24 + $slot] == '1') {
-                $slotEnergyConsumption += $appliancePower[$applianceIndex];
+            $appliancePowerForSlot = $appliancePower[$applianceIndex] / 4; // Divide by 4 for 15-minute slot
+            if ($schedule[$applianceIndex * $timeSlots + $slot] == '1') {
+                $slotEnergyConsumption += $appliancePowerForSlot;
             }
         }
-
-        if ($slotEnergyConsumption <= $solarPowerForecast[$slot]) {
-            if($solarPowerForecast[$slot]!=0){
-            $fitness = $slotEnergyConsumption / $solarPowerForecast[$slot];
-            }
-            else{
-                $fitness=0;
-            }
-            
-        } else {
-            $fitness = $solarPowerForecast[$slot] / $slotEnergyConsumption;
-        }
-
+        
+        $totalsolarpower += $solarPowerForecast[$slot];
         $totalEnergyConsumption += $slotEnergyConsumption;
     }
-
-    return 1 / ($totalEnergyConsumption + 1);
+    if($totalsolarpower> $totalappliancepower)
+    {
+        $fitness=($totalsolarpower-$totalappliancepower)/$totalEnergyConsumption;
+    }
+    else if($totalsolarpower<=$totalappliancepower)
+    {
+        $fitness=1-($totalEnergyConsumption/$solarPowerForecast);
+    }
+    return $fitness;
 }
 
 function selectParent($population, $fitnessScores) {
@@ -119,7 +148,7 @@ function findBestSchedule($population, $solarPowerForecast, $appliancePower) {
 
     foreach ($population as $schedule) {
         $fitness = calculateFitness($schedule, $solarPowerForecast, $appliancePower);
-        if ($fitness > $bestFitness) {
+        if ($fitness > $bestFitness && $fitness <= 1) {
             $bestFitness = $fitness;
             $bestSchedule = $schedule;
         }
@@ -128,13 +157,14 @@ function findBestSchedule($population, $solarPowerForecast, $appliancePower) {
     return $bestSchedule;
 }
 
-function printSchedule($schedule,$appliancePower) {
+function printSchedule($schedule, $appliancePower) {
     echo "Optimized Schedule: " . PHP_EOL;
 
-    for ($slot = 0; $slot < 24; $slot++) {
+    $timeSlots = 24 * 4; // 24 hours with 15-minute slots
+    for ($slot = 0; $slot < $timeSlots; $slot++) {
         echo "Time Slot $slot: ";
         for ($applianceIndex = 0; $applianceIndex < count($appliancePower); $applianceIndex++) {
-            if ($schedule[$applianceIndex * 24 + $slot] == '1') {
+            if ($schedule[$applianceIndex * $timeSlots + $slot] == '1') {
                 echo "Appliance " . ($applianceIndex + 1) . ", ";
             }
         }
